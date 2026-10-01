@@ -160,16 +160,13 @@ router.post("/login", (req, res) => {
 
             }
 
-            const token = jwt.sign(
-                {
-                    id: user.id,
-                    username: user.username
-                },
-                JWT_SECRET,
-                {
-                    expiresIn: "7d"
-                }
-            );
+             const token = jwt.sign(
+             {
+             id: user.id,
+             username: user.username
+             },
+             JWT_SECRET
+              );
 
             res.json({
                 message: "Login successful.",
