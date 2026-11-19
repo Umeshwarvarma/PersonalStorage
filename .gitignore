@@ -1,11 +1,62 @@
+# ==========================================
+# Node.js
+# ==========================================
+
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# ==========================================
+# Environment / Secrets
+# ==========================================
+
 .env
 .env.*
+!.env.example
+
+
+# ==========================================
+# Backend
+# ==========================================
+
+backend/node_modules/
+backend/.env
+
+# Uploaded files
 backend/uploads/
+
+# SQLite databases
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3
+
+
+# ==========================================
+# Frontend
+# ==========================================
+
+frontend/node_modules/
 frontend/dist/
-.vscode/
+frontend/.env
+frontend/.env.*
+
+
+# ==========================================
+# OS / Editor
+# ==========================================
+
 .DS_Store
 Thumbs.db
+
+.vscode/
+.idea/
+
+
+# ==========================================
+# Temporary files
+# ==========================================
+
+*.log
+*.tmp

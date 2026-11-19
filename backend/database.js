@@ -1,6 +1,9 @@
 const sqlite3 = require("sqlite3").verbose();
+const path = require("path");
 
-const db = new sqlite3.Database("./storage.db", (err) => {
+const databasePath = path.join(__dirname, "personalstorage.db");
+
+const db = new sqlite3.Database(databasePath, (err) => {
     if (err) {
         console.error("Database connection failed:", err.message);
     } else {
@@ -10,14 +13,19 @@ const db = new sqlite3.Database("./storage.db", (err) => {
 
 db.serialize(() => {
 
+    // USERS TABLE
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            username TEXT NOT NULL UNIQUE,
+            email TEXT,
+            password TEXT NOT NULL,
+            reset_token TEXT,
+            reset_token_expires INTEGER
         )
     `);
 
+    // FILES TABLE
     db.run(`
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +39,50 @@ db.serialize(() => {
         )
     `);
 
+    // Add email column to older databases if necessary
+    db.all(
+        `PRAGMA table_info(users)`,
+        (err, columns) => {
+
+            if (err) {
+                console.error(err);
+                return;
+            }
+
+            const hasEmail =
+                columns.some(
+                    column => column.name === "email"
+                );
+
+            const hasResetToken =
+                columns.some(
+                    column => column.name === "reset_token"
+                );
+
+            const hasResetExpiry =
+                columns.some(
+                    column => column.name === "reset_token_expires"
+                );
+
+            if (!hasEmail) {
+                db.run(
+                    `ALTER TABLE users ADD COLUMN email TEXT`
+                );
+            }
+
+            if (!hasResetToken) {
+                db.run(
+                    `ALTER TABLE users ADD COLUMN reset_token TEXT`
+                );
+            }
+
+            if (!hasResetExpiry) {
+                db.run(
+                    `ALTER TABLE users ADD COLUMN reset_token_expires INTEGER`
+                );
+            }
+        }
+    );
 });
 
 module.exports = db;

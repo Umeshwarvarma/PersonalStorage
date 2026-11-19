@@ -1,10 +1,13 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = "personal_storage_secret_2026";
+const JWT_SECRET =
+    process.env.JWT_SECRET ||
+    "personal_storage_secret_2026";
 
 function authenticateToken(req, res, next) {
 
-    const authHeader = req.headers.authorization;
+    const authHeader =
+        req.headers.authorization;
 
     const token =
         authHeader &&
