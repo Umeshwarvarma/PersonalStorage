@@ -1,17 +1,23 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET =
-    process.env.JWT_SECRET ||
-    "personal_storage_secret_2026";
+const JWT_SECRET = process.env.JWT_SECRET ||
+    (process.env.NODE_ENV === "production"
+        ? ""
+        : "personal_storage_secret_2026");
+
+if (process.env.NODE_ENV === "production" && JWT_SECRET.length < 32) {
+    throw new Error("Production requires a JWT_SECRET of at least 32 characters.");
+}
 
 function authenticateToken(req, res, next) {
 
     const authHeader =
         req.headers.authorization;
 
-    const token =
-        authHeader &&
-        authHeader.split(" ")[1];
+    const match =
+        typeof authHeader === "string" &&
+        authHeader.match(/^Bearer\s+(\S+)$/i);
+    const token = match && match[1];
 
     if (!token) {
 
@@ -28,10 +34,15 @@ function authenticateToken(req, res, next) {
 
             if (err) {
 
-                return res.status(403).json({
+                return res.status(401).json({
                     message: "Invalid or expired token."
                 });
+            }
 
+            if (!Number.isSafeInteger(user?.id) || user.id <= 0) {
+                return res.status(401).json({
+                    message: "Invalid or expired token."
+                });
             }
 
             req.user = user;

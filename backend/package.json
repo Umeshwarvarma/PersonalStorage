@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package",
   "name": "personal-storage-backend",
   "version": "1.0.0",
   "description": "Personal File and Photo Storage",

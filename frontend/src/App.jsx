@@ -27,18 +27,16 @@ import {
     X
 } from "lucide-react";
 import FileTools from "./FileTools.jsx";
+import { getApiErrorMessage, readJsonResponse } from "./api.js";
 import { shareOriginalFiles } from "./fileActions.js";
 import { getFilePreviewKind } from "./filePreview.js";
 import "./App.css";
 
 // =====================================================
 // BACKEND URL
-// =====================================================
-
-const API_BASE =
-    ["localhost", "127.0.0.1"].includes(window.location.hostname)
-        ? "http://localhost:5000"
-        : "https://personalstorage.onrender.com";
+const API_BASE = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
 
 const accentOptions = [
     { name: "Blue", value: "#536dfe" },
@@ -333,14 +331,13 @@ function App() {
                 );
 
 
-            const data =
-                await response.json();
+            const data = await readJsonResponse(response);
 
 
             if (!response.ok) {
 
                 throw new Error(
-                    data.message ||
+                    data?.message ||
                     "Something went wrong."
                 );
 
@@ -363,6 +360,9 @@ function App() {
                 return;
             }
 
+            if (typeof data?.token !== "string" || !data.username) {
+                throw new Error("The server returned an invalid login response.");
+            }
 
             // LOGIN
 
@@ -389,7 +389,7 @@ function App() {
         } catch (error) {
 
             setMessage(
-                error.message
+                getApiErrorMessage(error, "Something went wrong.")
             );
 
         } finally {
@@ -462,14 +462,13 @@ function App() {
                 );
 
 
-            const data =
-                await response.json();
+            const data = await readJsonResponse(response);
 
 
             if (!response.ok) {
 
                 throw new Error(
-                    data.message ||
+                    data?.message ||
                     "Could not send reset email."
                 );
 
@@ -483,7 +482,7 @@ function App() {
         } catch (error) {
 
             setMessage(
-                error.message
+                getApiErrorMessage(error, "Could not send reset email.")
             );
 
         } finally {
@@ -534,14 +533,13 @@ function App() {
                 );
 
 
-            const data =
-                await response.json();
+            const data = await readJsonResponse(response);
 
 
             if (!response.ok) {
 
                 throw new Error(
-                    data.message ||
+                    data?.message ||
                     "Password reset failed."
                 );
 
@@ -568,7 +566,7 @@ function App() {
         } catch (error) {
 
             setMessage(
-                error.message
+                getApiErrorMessage(error, "Password reset failed.")
             );
 
         } finally {
@@ -655,25 +653,24 @@ function App() {
             }
 
 
-            const data =
-                await response.json();
+            const data = await readJsonResponse(response);
 
 
             if (!response.ok) {
 
                 throw new Error(
-                    data.message ||
+                    data?.message ||
                     "Could not load files."
                 );
 
             }
 
 
-            setFiles(
-                Array.isArray(data)
-                    ? data
-                    : []
-            );
+            if (!Array.isArray(data)) {
+                throw new Error("The server returned an invalid file list.");
+            }
+
+            setFiles(data);
 
         } catch (error) {
 
@@ -682,7 +679,7 @@ function App() {
             );
 
             setMessage(
-                error.message
+                getApiErrorMessage(error, "Could not load files.")
             );
 
         }
@@ -730,28 +727,35 @@ function App() {
                 }
 
 
-                const data =
-                    await response.json();
+                const data = await readJsonResponse(response);
 
 
-                if (response.ok) {
-
-                    setStorageInfo({
-
-                        fileCount:
-                            data.fileCount || 0,
-
-                        totalSize:
-                            data.totalSize || 0
-
-                    });
-
+                if (!response.ok) {
+                    throw new Error(data?.message || "Could not calculate storage.");
                 }
+
+                if (
+                    !Number.isFinite(Number(data?.fileCount)) ||
+                    !Number.isFinite(Number(data?.totalSize))
+                ) {
+                    throw new Error("The server returned invalid storage information.");
+                }
+
+                setStorageInfo({
+
+                    fileCount:
+                        Number(data.fileCount),
+
+                    totalSize:
+                        Number(data.totalSize)
+
+                });
 
             } catch (error) {
 
-                console.error(
-                    error
+                console.error(error);
+                setMessage(
+                    getApiErrorMessage(error, "Could not calculate storage.")
                 );
 
             }
@@ -776,10 +780,14 @@ function App() {
                 return;
             }
 
-            const data = await response.json();
+            const data = await readJsonResponse(response);
 
             if (!response.ok) {
-                throw new Error(data.message || "Could not load profile settings.");
+                throw new Error(data?.message || "Could not load profile settings.");
+            }
+
+            if (!data?.username) {
+                throw new Error("The server returned an invalid profile response.");
             }
 
             setUsername(data.username);
@@ -790,7 +798,9 @@ function App() {
             });
         } catch (error) {
             console.error("Profile settings request failed:", error);
-            setProfileMessage(error.message || "Could not load profile settings.");
+            setProfileMessage(
+                getApiErrorMessage(error, "Could not load profile settings.")
+            );
         }
     }, [handleAuthError]);
 
@@ -893,19 +903,25 @@ function App() {
                     handleAuthError({ status: request.status });
                 }
 
-                let data;
+                const data = (() => {
+                    if (!request.responseText.trim()) {
+                        return null;
+                    }
 
-                try {
-                    data = JSON.parse(request.responseText);
-                } catch {
-                    reject(
-                        new Error("The server returned an invalid upload response.")
-                    );
+                    try {
+                        return JSON.parse(request.responseText);
+                    } catch {
+                        return null;
+                    }
+                })();
+
+                if (request.status < 200 || request.status >= 300) {
+                    reject(new Error(data?.message || "Upload failed."));
                     return;
                 }
 
-                if (request.status < 200 || request.status >= 300) {
-                    reject(new Error(data.message || "Upload failed."));
+                if (!data || typeof data.fileId !== "number") {
+                    reject(new Error("The server returned an invalid upload response."));
                     return;
                 }
 
@@ -979,10 +995,14 @@ function App() {
                 return;
             }
 
-            const data = await response.json();
+            const data = await readJsonResponse(response);
 
             if (!response.ok) {
-                throw new Error(data.message || "Could not save profile settings.");
+                throw new Error(data?.message || "Could not save profile settings.");
+            }
+
+            if (!data?.username || typeof data.email !== "string") {
+                throw new Error("The server returned an invalid profile response.");
             }
 
             setUsername(data.username);
@@ -994,7 +1014,9 @@ function App() {
             localStorage.setItem("username", data.username);
             setProfileMessage("Profile settings saved.");
         } catch (error) {
-            setProfileMessage(error.message || "Could not save profile settings.");
+            setProfileMessage(
+                getApiErrorMessage(error, "Could not save profile settings.")
+            );
         } finally {
             setProfileBusy(false);
         }
@@ -1032,10 +1054,10 @@ function App() {
                 return;
             }
 
-            const data = await response.json();
+            const data = await readJsonResponse(response);
 
             if (!response.ok) {
-                throw new Error(data.message || "Could not update the password.");
+                throw new Error(data?.message || "Could not update the password.");
             }
 
             setCurrentPassword("");
@@ -1043,7 +1065,9 @@ function App() {
             setConfirmSettingsPassword("");
             setPasswordMessage("Password updated successfully.");
         } catch (error) {
-            setPasswordMessage(error.message || "Could not update the password.");
+            setPasswordMessage(
+                getApiErrorMessage(error, "Could not update the password.")
+            );
         } finally {
             setPasswordBusy(false);
         }
@@ -1142,15 +1166,26 @@ function App() {
             }
 
             if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || "Compression failed.");
+                const data = await readJsonResponse(response);
+                throw new Error(data?.message || "Compression failed.");
             }
 
             const compressedFile = await response.blob();
+            const responseType = response.headers.get("Content-Type") || "";
+            if (
+                !compressedFile.size ||
+                responseType.includes("application/json") ||
+                responseType.includes("text/html")
+            ) {
+                throw new Error("The server returned an invalid compressed file.");
+            }
             const originalSizeHeader = response.headers.get("X-Original-Size");
-            const originalSize = originalSizeHeader === null
+            const parsedOriginalSize = Number(originalSizeHeader);
+            const originalSize = originalSizeHeader === null ||
+                !Number.isFinite(parsedOriginalSize) ||
+                parsedOriginalSize < 0
                 ? file.size
-                : Number(originalSizeHeader);
+                : parsedOriginalSize;
 
             setCompressionJob((current) => ({
                 ...current,
@@ -1162,7 +1197,7 @@ function App() {
             setCompressionJob((current) => ({
                 ...current,
                 status: "error",
-                error: error.message || "Could not compress the file."
+                error: getApiErrorMessage(error, "Could not compress the file.")
             }));
         }
     };
@@ -1294,17 +1329,12 @@ function App() {
             }
 
             if (!response.ok) {
-                let data = {};
-                try {
-                    data = await response.json();
-                } catch {
-                    data = {};
-                }
+                const data = await readJsonResponse(response);
                 const errorMessage = response.status === 404
                     ? "This file could not be found. It may have been deleted or may not belong to your account."
                     : response.status >= 500
                         ? "The server could not load this file. Try again later."
-                        : data.message || "Preview request failed (" + response.status + ").";
+                        : data?.message || "Preview request failed (" + response.status + ").";
                 setFilePreview((current) => current?.file.id === file.id
                     ? { ...current, status: "error", message: errorMessage }
                     : current);
@@ -1411,11 +1441,10 @@ function App() {
 
                 if (!response.ok) {
 
-                    const data =
-                        await response.json();
+                    const data = await readJsonResponse(response);
 
                     throw new Error(
-                        data.message ||
+                        data?.message ||
                         "Download failed."
                     );
 
@@ -1424,7 +1453,6 @@ function App() {
 
                 const blob =
                     await response.blob();
-
 
                 const url =
                     URL.createObjectURL(
@@ -1454,9 +1482,7 @@ function App() {
 
             } catch (error) {
 
-                alert(
-                    error.message
-                );
+                alert(getApiErrorMessage(error, "Download failed."));
 
             }
 
@@ -1512,14 +1538,13 @@ function App() {
                 }
 
 
-                const data =
-                    await response.json();
+                const data = await readJsonResponse(response);
 
 
                 if (!response.ok) {
 
                     throw new Error(
-                        data.message ||
+                        data?.message ||
                         "Delete failed."
                     );
 
@@ -1545,9 +1570,7 @@ function App() {
 
             } catch (error) {
 
-                alert(
-                    error.message
-                );
+                alert(getApiErrorMessage(error, "Delete failed."));
 
             }
 

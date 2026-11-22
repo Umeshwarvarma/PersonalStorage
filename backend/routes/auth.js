@@ -26,6 +26,15 @@ const transporter = nodemailer.createTransport({
 
 });
 
+const escapeHtml = (value) =>
+    String(value).replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[character]);
+
 
 // ==========================================
 // REGISTER
@@ -37,10 +46,17 @@ router.post("/register", async (req, res) => {
         username,
         email,
         password
-    } = req.body;
+    } = req.body || {};
 
 
-    if (!username || !email || !password) {
+    if (
+        typeof username !== "string" ||
+        typeof email !== "string" ||
+        typeof password !== "string" ||
+        !username ||
+        !email ||
+        !password
+    ) {
 
         return res.status(400).json({
             message:
@@ -181,10 +197,15 @@ router.post("/login", (req, res) => {
     const {
         username,
         password
-    } = req.body;
+    } = req.body || {};
 
 
-    if (!username || !password) {
+    if (
+        typeof username !== "string" ||
+        typeof password !== "string" ||
+        !username ||
+        !password
+    ) {
 
         return res.status(400).json({
             message:
@@ -470,17 +491,23 @@ router.post(
     "/forgot-password",
     (req, res) => {
 
-        const { email } =
-            req.body;
+        const { email } = req.body || {};
 
 
-        if (!email) {
+        if (typeof email !== "string" || !email.trim()) {
 
             return res.status(400).json({
                 message:
                     "Email is required."
+
             });
 
+        }
+
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+            return res.status(503).json({
+                message: "Password reset email is not configured."
+            });
         }
 
 
@@ -566,9 +593,8 @@ router.post(
                             process.env.FRONTEND_URL ||
                             "http://localhost:5173";
 
-
                         const resetLink =
-                            `${frontendUrl}/?resetToken=${resetToken}`;
+                            `${frontendUrl.replace(/\/+$/, "")}/?resetToken=${resetToken}`;
 
 
                         try {
@@ -588,7 +614,7 @@ router.post(
                                     <div style="font-family:Arial,sans-serif;">
                                         <h2>PersonalStorage</h2>
 
-                                        <p>Hello ${user.username},</p>
+                                        <p>Hello ${escapeHtml(user.username)},</p>
 
                                         <p>
                                             We received a request to reset
@@ -674,10 +700,15 @@ router.post(
         const {
             token,
             newPassword
-        } = req.body;
+        } = req.body || {};
 
 
-        if (!token || !newPassword) {
+        if (
+            typeof token !== "string" ||
+            typeof newPassword !== "string" ||
+            !token ||
+            !newPassword
+        ) {
 
             return res.status(400).json({
                 message:

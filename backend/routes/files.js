@@ -14,7 +14,9 @@ const router = express.Router();
 // UPLOAD FOLDER
 // =====================================
 
-const uploadFolder = path.join(__dirname, "../uploads");
+const uploadFolder = path.resolve(
+    process.env.UPLOADS_DIR || path.join(__dirname, "../uploads")
+);
 
 if (!fs.existsSync(uploadFolder)) {
     fs.mkdirSync(uploadFolder, { recursive: true });
@@ -424,12 +426,9 @@ router.get(
 
                 }
 
-                const filePath = path.join(
-                    uploadFolder,
-                    file.filename
-                );
+                const filePath = resolveStoredFilePath(file.filename);
 
-                if (!fs.existsSync(filePath)) {
+                if (!filePath || !fs.existsSync(filePath)) {
 
                     return res.status(404).json({
                         message: "Physical file not found."
@@ -437,10 +436,34 @@ router.get(
 
                 }
 
-                res.download(
-                    filePath,
-                    file.original_name
+                const originalBasename = getOriginalBasename(file.original_name);
+                const fallbackName = originalBasename.replace(/[^\x20-\x7E"\\]/g, "_");
+                const encodedName = encodeURIComponent(originalBasename).replace(
+                    /['()*]/g,
+                    (character) =>
+                        `%${character.charCodeAt(0).toString(16).toUpperCase()}`
                 );
+
+                res.setHeader("Content-Type", getStoredMimeType(file));
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`
+                );
+                res.setHeader("X-Content-Type-Options", "nosniff");
+
+                const stream = fs.createReadStream(filePath);
+                stream.on("error", (streamError) => {
+                    console.error("Could not read file for download:", streamError);
+
+                    if (!res.headersSent) {
+                        res.status(500).json({
+                            message: "Could not read the stored file."
+                        });
+                    } else {
+                        res.destroy();
+                    }
+                });
+                stream.pipe(res);
 
             }
         );
@@ -591,12 +614,15 @@ router.delete(
                     });
                 }
 
-                const filePath = path.join(
-                    uploadFolder,
-                    file.filename
-                );
+                const filePath = resolveStoredFilePath(file.filename);
 
                 // Delete physical file if it exists
+                if (!filePath) {
+                    return res.status(404).json({
+                        message: "Physical file not found."
+                    });
+                }
+
                 if (fs.existsSync(filePath)) {
 
                     try {

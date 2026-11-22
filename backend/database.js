@@ -1,7 +1,11 @@
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const fs = require("fs");
 
-const databasePath = path.join(__dirname, "personalstorage.db");
+const databasePath = path.resolve(
+    process.env.DATABASE_PATH || path.join(__dirname, "personalstorage.db")
+);
+fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
 const db = new sqlite3.Database(databasePath, (err) => {
     if (err) {
